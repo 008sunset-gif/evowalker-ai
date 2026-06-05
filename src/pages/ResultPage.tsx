@@ -227,7 +227,7 @@ export const ResultPage = () => {
           </div>
         </div>
 
-        {/* 4. 詳細レポート (就活アピール用のデザイン/アルゴリズム設計解説を兼ねたアコーディオン) */}
+        {/* 4. 詳細レポート (デザイン/アルゴリズム設計の意図を解説するアコーディオン) */}
         <div className="card" style={{
           background: '#f8fafc',
           border: '1px solid #e2e8f0',
