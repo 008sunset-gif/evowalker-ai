@@ -42,7 +42,8 @@ const SimulationContext = createContext<SimulationContextType | undefined>(undef
 export const SimulationProvider = ({ children }: { children: ReactNode }) => {
   // 状態の定義
   const [selectedScenarioId, setSelectedScenarioId] = useState<ScenarioType>('');
-  const [aiPersonality, setAiPersonality] = useState<PersonalityType>('');
+  // 歩行方針は初期状態で「安定重視(safety)」を選択済みにする（未選択で進めない印象を避ける）
+  const [aiPersonality, setAiPersonality] = useState<PersonalityType>('safety');
   const [learningSpeed, setLearningSpeed] = useState<SpeedType>('normal');
   const [carCount, setCarCount] = useState<PopulationType>('normal');
   const [maxGenerations, setMaxGenerations] = useState<GenerationOptionType>(30);
@@ -55,7 +56,6 @@ export const SimulationProvider = ({ children }: { children: ReactNode }) => {
   // コース選択
   const selectScenario = (scenarioId: ScenarioType) => {
     setSelectedScenarioId(scenarioId);
-    console.log(`[Context] selectScenario: ${scenarioId}`);
   };
 
   // AI設定値の更新
@@ -64,19 +64,16 @@ export const SimulationProvider = ({ children }: { children: ReactNode }) => {
     if (config.learningSpeed !== undefined) setLearningSpeed(config.learningSpeed);
     if (config.carCount !== undefined) setCarCount(config.carCount);
     if (config.maxGenerations !== undefined) setMaxGenerations(config.maxGenerations);
-    console.log('[Context] updateAIConfig:', config);
   };
 
   // シミュレーションの開始・再開
   const startSimulation = () => {
     setSimulationStatus('running');
-    console.log('[Context] startSimulation');
   };
 
   // シミュレーションの一時停止
   const pauseSimulation = () => {
     setSimulationStatus('paused');
-    console.log('[Context] pauseSimulation');
   };
 
   // シミュレーション走行完了
@@ -84,7 +81,6 @@ export const SimulationProvider = ({ children }: { children: ReactNode }) => {
     setSimulationStatus('completed');
     setIsSimulationCompleted(true);
     setMockFinalResult(mockResult);
-    console.log('[Context] completeSimulation:', mockResult);
   };
 
   // 世代分析画面への移行処理
@@ -93,13 +89,12 @@ export const SimulationProvider = ({ children }: { children: ReactNode }) => {
       setSimulationStatus('completed');
     }
     setIsSimulationCompleted(true);
-    console.log('[Context] goToAnalysis');
   };
 
   // すべての状態の初期化（リセット）
   const resetSimulation = () => {
     setSelectedScenarioId('');
-    setAiPersonality('');
+    setAiPersonality('safety'); // デフォルトの歩行方針を再選択状態にする
     setLearningSpeed('normal');
     setCarCount('normal');
     setMaxGenerations(30);
@@ -108,7 +103,6 @@ export const SimulationProvider = ({ children }: { children: ReactNode }) => {
     setMockEvolutionHistory([]);
     setMockFinalResult(null);
     setIsSimulationCompleted(false);
-    console.log('[Context] resetSimulation - All states initialized.');
   };
 
   return (

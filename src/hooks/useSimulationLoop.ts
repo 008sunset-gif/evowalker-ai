@@ -91,6 +91,9 @@ export const useSimulationLoop = ({
           startPoint,
           currentGeneration,
           (x, y, isLeft) => {
+            // 物理判定は毎サブステップ実行するが、足音パーティクルは装飾のため
+            // 高速時(10倍速超)は抑制して描画負荷を下げる（50倍速でも固まらないように）
+            if (runSpeed > 10) return;
             const lateralOffset = isLeft ? 4 : -4;
             spawnParticle('ripple', x, y + lateralOffset, '#60a5fa');
             spawnParticle('smoke', x, y + lateralOffset, '#94a3b8');

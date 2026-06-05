@@ -1,6 +1,7 @@
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { SimulationProvider } from './context/SimulationContext';
 import { Layout } from './components/Layout';
+import { ScrollToTop } from './components/ScrollToTop';
 import TopPage from './pages/TopPage';
 import ScenarioPage from './pages/ScenarioPage';
 import ConfigPage from './pages/ConfigPage';
@@ -13,6 +14,7 @@ function App() {
   return (
     <SimulationProvider>
       <Router>
+        <ScrollToTop />
         <Layout>
           <Routes>
             <Route path="/" element={<TopPage />} />

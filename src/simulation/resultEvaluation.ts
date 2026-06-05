@@ -68,7 +68,7 @@ export const evaluateEvolutionHistory = (history: GenerationResult[]): MockFinal
     rating = scoreImprovementPercent >= 50 && lastCrashRatePercent <= 15 ? 'S' : 'A+';
     typeLabel = rating === 'S' ? '👑 完全適応・エリート集団形成' : '🌟 理想的進化・優秀遺伝子獲得';
     aiType = '世代交代を重ねるごとに優秀な遺伝子が集団全体に波及し、歩行距離の伸長と転倒率の低下を両立させた理想的な進化モデルです。';
-    improvedPoints = '初期世代の多様な失敗（転倒、コースアウト、立ち往生）から最適なパラメーターが抽出・交叉され、集団全体が高い姿勢補正力と直進性を獲得しました。';
+    improvedPoints = '初期世代の多様な失敗（転倒、コースアウト、立ち往生）から最適なパラメーターが抽出・継承され、集団全体が高い姿勢補正力と直進性を獲得しました。';
     remainingWeakness = '現状の環境ではほぼ完璧な適応を見せていますが、さらなるノイズや予期せぬ障害物が追加された場合、環境変化への対応力が問われます。';
     nextAdvice = '素晴らしい学習成果です！次はより複雑な地形や、歩行ノイズが多い高難易度シナリオにもこの遺伝子群で挑戦してみてください。';
   }

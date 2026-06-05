@@ -66,7 +66,7 @@ export const BriefingPage = () => {
                 </span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '12px', borderBottom: '1px solid #f1f5f9' }}>
-                <span style={{ fontSize: '13px', color: '#64748b', fontWeight: '700' }}>学習スピード</span>
+                <span style={{ fontSize: '13px', color: '#64748b', fontWeight: '700' }}>学習スタイル</span>
                 <span style={{ fontSize: '14px', fontWeight: '800', color: '#0f172a' }}>
                   {learningSpeed === 'fast' ? '高速進化' : learningSpeed === 'slow' ? '慎重進化' : '通常'}
                 </span>

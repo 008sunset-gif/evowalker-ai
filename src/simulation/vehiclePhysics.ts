@@ -1,5 +1,5 @@
 // Cache invalidate comment for physics
-import type { VehicleState, Waypoint, PersonalityType, VehicleGenome } from '../types/simulation';
+import type { VehicleState, PersonalityType, VehicleGenome } from '../types/simulation';
 
 /**
  * 第1世代の初期ゲノムをランダムに生成する
@@ -12,9 +12,14 @@ export const createInitialGenome = (_personality: PersonalityType): VehicleGenom
     balanceCorrection: Math.random() * 1.5,  // 0.0 〜 1.5
     lateralDrift: (Math.random() - 0.5) * 4, // -2.0 〜 2.0
     wobbleStrength: Math.random() * 2.5,     // 0.0 〜 2.5
-    speedFactor: Math.random() * 1.5,        // 0.0 〜 1.5
+    speedFactor: 0.4 + Math.random() * 1.1,  // 0.4 〜 1.5（最低限の前進力を確保し全員即死を防ぐ）
     steeringBias: (Math.random() - 0.5) * 2, // -1.0 〜 1.0
-    recoveryAbility: Math.random() * 1.2     // 0.0 〜 1.2
+    recoveryAbility: Math.random() * 1.2,    // 0.0 〜 1.2
+    // 歩行パターン特性（広く分散させ、まっすぐ/蛇行/流れ/コースアウトの個体差を自然発生させる）
+    lateralAmplitude: Math.random() * 2.0,        // 0.0 〜 2.0（蛇行の大きさを広くばらつかせる）
+    lateralFrequency: Math.random() * 1.5,        // 0.0 〜 1.5（蛇行の周期）
+    lateralPhase: (Math.random() - 0.5) * 2,      // -1.0 〜 1.0（揺れの開始位相、後段で×π）
+    centerPull: Math.random() * 0.8               // 0.0 〜 0.8（弱め：多くが中央に戻りきれない）
   };
 };
 
@@ -50,7 +55,7 @@ export const initVehicles = (
   return Array.from({ length: count }, (_, idx) => {
     const individualSpeedNoise = (Math.random() - 0.5) * speedSpread;
     const individualNoise = (Math.random() - 0.5) * noiseSpread;
-    
+
     // 3D座標系に合わせた初期散らばり
     // walker.x: 前進方向 (startPoint.x = 0付近)
     // walker.y: 横ずれ方向 (LANE_HALF_WIDTH=100 の範囲内)
@@ -85,106 +90,4 @@ export const initVehicles = (
       genome,
     };
   });
-};
-
-// 物理ステートの1ステップ更新 (Waypoint誘導走行)
-// 物理ステートの1ステップ更新 (Waypoint誘導走行にゲノムを反映)
-export const updateVehiclePhysics = (
-  vehicle: VehicleState,
-  waypoints: Waypoint[],
-  personality: PersonalityType,
-  isClosedCourse: boolean = false
-): VehicleState => {
-  if (!vehicle.isActive || waypoints.length === 0) return vehicle;
-
-  // 1. 現在目指しているwaypointを取得
-  const targetWp = waypoints[vehicle.currentWaypointIndex];
-  
-  // 2. 目標方向への角度を計算
-  const dx = targetWp.x - vehicle.x;
-  const dy = targetWp.y - vehicle.y;
-  const distance = Math.sqrt(dx * dx + dy * dy);
-  
-  let targetAngle = Math.atan2(dy, dx);
-  
-  // 3. 角度の差分を求める (-PI から +PI の範囲に正規化)
-  let angleDiff = targetAngle - vehicle.angle;
-  while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
-  while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
-
-  // 4. ゲノム特性を反映した旋回力（steering）の決定
-  let baseTurnSensitivity = 0.11;
-  if (personality === 'safety') {
-    baseTurnSensitivity = 0.14; // 鋭く正確に反応
-  } else if (personality === 'speed') {
-    baseTurnSensitivity = 0.08; // 膨らみやすい挙動
-  }
-  
-  // steeringResponsiveness (旋回感度) の代わりに balanceCorrection を流用
-  const turnSensitivity = baseTurnSensitivity * vehicle.genome.balanceCorrection;
-
-  // noiseFactor (走行のブレ) の代わりに wobbleStrength を流用
-  const steerNoise = (Math.random() - 0.5) * 0.08 * vehicle.genome.wobbleStrength;
-  const targetSteering = angleDiff * turnSensitivity + steerNoise;
-  
-  // ステアリング舵角の限界制限 (0.15 から 0.22 に拡張して、優れた個体が急カーブを曲がりきれる余地を作る)
-  const maxSteer = 0.22;
-  vehicle.steering = Math.max(-maxSteer, Math.min(maxSteer, targetSteering));
-
-  // 5. 進行角度の更新
-  vehicle.angle += vehicle.steering;
-
-  // 6. 速度の調整（ゲノムを反映：maxSpeedFactor -> speedFactor, brakeSensitivity -> recoveryAbility, safetyMargin -> balanceCorrection）
-  const scaledMaxSpeed = vehicle.maxSpeedLimit * vehicle.genome.speedFactor; // 最高速度
-  const speedUpRate = 0.1;
-  // 減速レート
-  const slowDownRate = 0.25 * vehicle.genome.recoveryAbility; 
-  
-  // 減速判定閾値に safetyMargin -> balanceCorrection を反映
-  const curveThreshold = 0.35 / vehicle.genome.balanceCorrection;
-
-  if (Math.abs(angleDiff) > curveThreshold) {
-    const baseSlowRatio = personality === 'safety' ? 0.4 : personality === 'speed' ? 0.7 : 0.55;
-    const targetSlowSpeed = (scaledMaxSpeed * baseSlowRatio) / Math.max(0.6, vehicle.genome.recoveryAbility * 0.5 + 0.5);
-    vehicle.speed -= slowDownRate;
-    if (vehicle.speed < targetSlowSpeed) vehicle.speed = targetSlowSpeed;
-  } else {
-    // 直線時
-    vehicle.speed += speedUpRate;
-    if (vehicle.speed > scaledMaxSpeed) vehicle.speed = scaledMaxSpeed;
-  }
-
-  // 7. 位置の更新 (前進)
-  vehicle.x += Math.cos(vehicle.angle) * vehicle.speed;
-  vehicle.y += Math.sin(vehicle.angle) * vehicle.speed;
-  
-  // 総走行距離の加算
-  vehicle.distanceTravelled += vehicle.speed;
-
-  // 8. waypointへの接近判定 (目標点に近づいたら次のwaypointへ)
-  const waypointTolerance = 30; // 目標通過許容半径
-  if (distance < waypointTolerance) {
-    if (!isClosedCourse && vehicle.currentWaypointIndex === waypoints.length - 1) {
-      // 非周回（市街地）コースの最終Waypoint到達
-      vehicle.waypointsPassed += 1;
-      vehicle.reachedGoal = true;
-      vehicle.isActive = false;
-      vehicle.speed = 0;
-      vehicle.steering = 0;
-    } else {
-      // 周回コースまたは非周回コースの途中
-      vehicle.currentWaypointIndex = (vehicle.currentWaypointIndex + 1) % waypoints.length;
-      vehicle.waypointsPassed += 1;
-
-      // 周回コースの場合、1周（すべてのWaypointを通過）したらゴール
-      if (isClosedCourse && vehicle.waypointsPassed >= waypoints.length) {
-        vehicle.reachedGoal = true;
-        vehicle.isActive = false;
-        vehicle.speed = 0;
-        vehicle.steering = 0;
-      }
-    }
-  }
-
-  return { ...vehicle };
 };

@@ -126,12 +126,19 @@ export const LaneEnvironment3D = ({ scenarioId, goalX = GOAL_X }: LaneEnvironmen
         <pointLight position={[0, 5, 0]} intensity={1.5} color="#4ade80" distance={60} decay={2} />
       </group>
 
-      {/* ========== シナリオ別障害物 ========== */}
+      {/* ========== シナリオ別障害物（障害物レーン circuit のみ） ========== */}
+      {/* 物理判定(updateWalkerPhysics3D)と同一の OBSTACLES_3D を参照し、見た目と当たり判定を一致させる */}
       {scenarioId === 'circuit' && (
         <group>
-          {/* 障害物はレーン内（Z: -80〜+80、X: 150〜500の範囲）に配置 */}
           {OBSTACLES_3D.map((obs, i) => (
-            <LaneObstacle key={i} position={[obs.x, 5, obs.z]} size={[obs.width, 10, obs.depth]} color="#ef4444" />
+            <LaneObstacle
+              key={i}
+              // 底面を地面(Y=0)に接地させる（中心 Y = height/2）
+              position={[obs.x, obs.height / 2, obs.z]}
+              // 判定矩形と同じフットプリント [X=width, Y=height, Z=depth]
+              size={[obs.width, obs.height, obs.depth]}
+              color={obs.color}
+            />
           ))}
         </group>
       )}

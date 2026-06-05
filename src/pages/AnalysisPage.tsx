@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useSimulation } from '../context/SimulationContext';
+import { toMeters, GOAL_DISTANCE_M } from '../simulation/walkerPhysics3D';
 
 export const AnalysisPage = () => {
   const navigate = useNavigate();
@@ -33,13 +34,11 @@ export const AnalysisPage = () => {
     if (mockEvolutionHistory && mockEvolutionHistory.length > 0) {
       return mockEvolutionHistory.map((g) => {
         const total = maxCarCount; // 母数は常に初期個体数とする
-        
-        // 平均距離の復元 (FinalScoreではなく、topVehiclesの平均を取るか、averageScoreから概算する)
-        // simulationPageでaverageScoreは finalScore の平均。
-        // distance は `distanceTravelled * 2.5` などのスコアなので概算。
-        // 正確な平均距離は取れないので概算を最大600m(ゴール)でクランプ。
-        const avgDistance = Math.min(600, Math.max(0, Math.floor((g.averageScore + 50) / 2.5))); 
-        
+
+        // 平均前進距離は実データ（各個体の distanceTravelled の平均をメートル換算した値）を使用。
+        // スコアからの逆算は行わない。0〜GOAL_DISTANCE_M(ゴール)の範囲。
+        const avgDistance = Math.max(0, Math.min(GOAL_DISTANCE_M, Math.floor(g.averageDistance ?? 0)));
+
         // 各種レート (0〜100%)
         const stableRate = Math.min(100, Math.max(0, Math.floor((g.aliveCount / total) * 100)));
         const fallRate = Math.min(100, Math.max(0, Math.floor((g.fallenCount / total) * 100)));
@@ -69,12 +68,18 @@ export const AnalysisPage = () => {
   const finalBestScore = lastPoint.bestScore;
   const initialBestScore = firstPoint.bestScore;
 
-  const padding = 55;
-  const graphWidth = 700;
-  const graphHeight = 300; // 高さを大きくして見やすくする
+  // 集団としての改善判定（バナー・結論ヘッドラインで共通利用。データ計算ロジックは従来どおり）
+  const isImproved = lastPoint.avgDistance > firstPoint.avgDistance + 5 || lastPoint.goalRate > firstPoint.goalRate;
+  const isWorsened = lastPoint.avgDistance < firstPoint.avgDistance - 5;
+  const verdictLabel = isImproved ? '改善あり' : isWorsened ? '悪化' : '停滞';
+  const verdictColor = isImproved ? '#10b981' : isWorsened ? '#ef4444' : '#f59e0b';
 
-  const maxDist = Math.max(...graphData.map(d => d.avgDistance));
-  const dynamicMaxDist = maxDist > 50 ? Math.ceil(maxDist / 50) * 50 : 50;
+  const padding = 45;
+  const graphWidth = 700;
+  const graphHeight = 230; // 2カラム配置に合わせ高さを抑制（変化は視認できる範囲を維持）
+
+  // 距離グラフの縦軸は常にゴール距離(GOAL_DISTANCE_M)を上限とし、全画面で基準を統一
+  const dynamicMaxDist = GOAL_DISTANCE_M;
 
   const renderGraph = (
     title: string,
@@ -137,9 +142,9 @@ export const AnalysisPage = () => {
     : null;
 
   const ranking = lastResult ? lastResult.topVehicles : [
-    { id: 1, finalScore: 1210, waypointsPassed: 5, distanceTravelled: 610, aliveTime: 1200, crashReason: 'ゴール到達', reachedGoal: true },
-    { id: 3, finalScore: 1140, waypointsPassed: 5, distanceTravelled: 605, aliveTime: 1280, crashReason: 'ゴール到達', reachedGoal: true },
-    { id: 7, finalScore: 920, waypointsPassed: 4, distanceTravelled: 480, aliveTime: 920, crashReason: '転倒', reachedGoal: false },
+    { id: 1, finalScore: 1210, waypointsPassed: 5, distanceTravelled: 300, aliveTime: 1200, crashReason: 'ゴール到達', reachedGoal: true },
+    { id: 3, finalScore: 1140, waypointsPassed: 5, distanceTravelled: 300, aliveTime: 1280, crashReason: 'ゴール到達', reachedGoal: true },
+    { id: 7, finalScore: 920, waypointsPassed: 4, distanceTravelled: 210, aliveTime: 920, crashReason: '転倒', reachedGoal: false },
   ];
 
   const handleNextPage = () => {
@@ -162,6 +167,36 @@ export const AnalysisPage = () => {
           <h2 style={{ margin: 0, fontSize: '2rem' }}>歩行データの世代分析</h2>
           <p style={{ margin: '8px 0 0 0', opacity: 0.8 }}>全世代にわたる学習過程を可視化し、進化の成果を分析します。</p>
         </div>
+      </div>
+
+      {/* ========== 結論ヘッドライン（初見でも一目で成果が分かる） ========== */}
+      <div className="conclusion-headline card" style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: '20px',
+        background: '#0f172a',
+        color: '#f8fafc',
+        padding: '20px 28px',
+        borderRadius: '16px',
+        marginBottom: '20px',
+        flexWrap: 'wrap',
+      }}>
+        <span style={{
+          flexShrink: 0,
+          fontSize: '20px',
+          fontWeight: 900,
+          padding: '8px 18px',
+          borderRadius: '12px',
+          background: verdictColor,
+          color: '#0f172a',
+        }}>{verdictLabel}</span>
+        <p style={{ margin: 0, fontSize: '15px', lineHeight: '1.7', color: '#e2e8f0', flex: 1, minWidth: '280px' }}>
+          第1世代から第{graphData.length}世代までの学習で、
+          平均前進距離 <b style={{ color: '#fff' }}>{firstPoint.avgDistance}m → {lastPoint.avgDistance}m</b>、
+          ゴール率 <b style={{ color: '#fff' }}>{firstPoint.goalRate}% → {lastPoint.goalRate}%</b>、
+          転倒率 <b style={{ color: '#fff' }}>{firstPoint.fallRate}% → {lastPoint.fallRate}%</b>、
+          コースアウト率 <b style={{ color: '#fff' }}>{firstPoint.outOfLaneRate}% → {lastPoint.outOfLaneRate}%</b> へ変化しました。
+        </p>
       </div>
 
       <div className="evolution-summary-banner card" style={{
@@ -201,24 +236,33 @@ export const AnalysisPage = () => {
         </div>
         <div style={{ textAlign: 'center' }}>
           <span style={{ fontSize: '12px', color: '#64748b', fontWeight: '700', letterSpacing: '0.5px' }}>集団改善度</span>
-          <div style={{ fontSize: '24px', fontWeight: '800', marginTop: '8px', color: lastPoint.avgDistance > firstPoint.avgDistance + 5 || lastPoint.goalRate > firstPoint.goalRate ? '#10b981' : lastPoint.avgDistance < firstPoint.avgDistance - 5 ? '#ef4444' : '#f59e0b' }}>
-            {lastPoint.avgDistance > firstPoint.avgDistance + 5 || lastPoint.goalRate > firstPoint.goalRate ? '改善あり' : lastPoint.avgDistance < firstPoint.avgDistance - 5 ? '悪化' : '停滞'}
+          <div style={{ fontSize: '24px', fontWeight: '800', marginTop: '8px', color: verdictColor }}>
+            {verdictLabel}
           </div>
         </div>
       </div>
 
-      <div className="analysis-grid" style={{ display: 'grid', gridTemplateColumns: '1.25fr 1fr', gap: '32px' }}>
-        <div className="charts-column" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-          
-          {renderGraph('平均前進距離', 'その世代の全個体が平均して進めた距離。ロボット集団が「前に進む方法」を学習したかを示します。', 'avgDistance', '#3b82f6', dynamicMaxDist, 'm')}
-          {renderGraph('ゴール率', 'ゴールに到達できた個体の割合。最終的に目的を達成できる優秀な遺伝子がどの程度増えたかを示します。', 'goalRate', '#10b981', 100, '%')}
-          {renderGraph('安定歩行率', '転倒せず、左右のブレを抑えて歩けた個体の割合。姿勢制御を学習できたかを示します。', 'stableRate', '#0ea5e9', 100, '%')}
-          {renderGraph('転倒率', '歩行中にバランスを崩して倒れた個体の割合。学習が進むにつれて減少します。', 'fallRate', '#f59e0b', 100, '%')}
-          {renderGraph('コースアウト率', '左右に逸れてレーン外へ出た個体の割合。直進性を学習できているかを示します。', 'outOfLaneRate', '#ef4444', 100, '%')}
-        </div>
+      {/* ========== 主要グラフ（2カラム×2段） ========== */}
+      <div className="analysis-charts-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '24px', marginBottom: '24px' }}>
+        {renderGraph('平均前進距離', '全個体が平均して進めた距離。集団が「前に進む方法」を学習したかを示します。', 'avgDistance', '#3b82f6', dynamicMaxDist, 'm')}
+        {renderGraph('ゴール率', 'ゴールに到達できた個体の割合。目的を達成できる優秀な遺伝子が増えたかを示します。', 'goalRate', '#10b981', 100, '%')}
+        {renderGraph('転倒率', '歩行中にバランスを崩して倒れた個体の割合。学習が進むにつれて減少します。', 'fallRate', '#f59e0b', 100, '%')}
+        {renderGraph('コースアウト率', '左右に逸れてレーン外へ出た個体の割合。直進性を学習できているかを示します。', 'outOfLaneRate', '#ef4444', 100, '%')}
+      </div>
 
-        <div className="milestones-column" style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
-          
+      {/* ========== 詳細グラフ（折りたたみ：安定歩行率） ========== */}
+      <details className="analysis-details" open style={{ marginBottom: '32px' }}>
+        <summary style={{ cursor: 'pointer', fontWeight: 700, color: '#334155', padding: '12px 16px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', listStyle: 'revert' }}>
+          詳細グラフ（安定歩行率）— クリックで開閉
+        </summary>
+        <div style={{ marginTop: '16px' }}>
+          {renderGraph('安定歩行率', '転倒せず、左右のブレを抑えて歩けた個体の割合。姿勢制御を学習できたかを示します。', 'stableRate', '#0ea5e9', 100, '%')}
+        </div>
+      </details>
+
+      {/* ========== ランキング & 進化比較（下部2カラム） ========== */}
+      <div className="analysis-bottom-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px', alignItems: 'start' }}>
+
           <div className="milestones-panel card" style={{ padding: '24px', borderRadius: '16px', border: '1px solid #e2e8f0' }}>
             <h3 style={{ fontSize: '18px', fontWeight: '800', margin: '0 0 8px 0', color: '#0f172a' }}>
               第 {lastResult?.generation || graphData.length} 世代 歩行ランキング
@@ -265,7 +309,7 @@ export const AnalysisPage = () => {
                       <span style={{ color: '#0ea5e9' }}>{car.finalScore} pts</span>
                     </div>
                     <div style={{ fontSize: '12px', color: '#64748b', display: 'flex', gap: '12px' }}>
-                      <span>距離: {car.reachedGoal ? 600 : Math.min(599, Math.floor(car.distanceTravelled * 2))}m</span>
+                      <span>距離: {car.reachedGoal ? GOAL_DISTANCE_M : toMeters(car.distanceTravelled)}m</span>
                       <span>生存: {car.aliveTime}F</span>
                     </div>
                     <div style={{ 
@@ -322,7 +366,6 @@ export const AnalysisPage = () => {
             </div>
           </div>
         </div>
-      </div>
 
       <div className="navigation-actions" style={{ display: 'flex', justifyContent: 'center', gap: '16px', marginTop: '48px' }}>
         <button onClick={() => navigate('/simulation')} className="btn btn-secondary btn-lg" style={{ width: '200px' }}>

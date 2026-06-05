@@ -122,13 +122,21 @@ export const WalkerRobot3D = ({ walker, isElite }: WalkerRobot3DProps) => {
       groupRef.current.position.y = THREE.MathUtils.lerp(groupRef.current.position.y, -3, 0.03);
       if (leftArmRef.current) { leftArmRef.current.rotation.z = THREE.MathUtils.lerp(leftArmRef.current.rotation.z, 0, 0.1); leftArmRef.current.rotation.x = THREE.MathUtils.lerp(leftArmRef.current.rotation.x, 0, 0.1); }
       if (rightArmRef.current) { rightArmRef.current.rotation.z = THREE.MathUtils.lerp(rightArmRef.current.rotation.z, 0, 0.1); rightArmRef.current.rotation.x = THREE.MathUtils.lerp(rightArmRef.current.rotation.x, 0, 0.1); }
+    } else if (walker.status === 'obstacleHit') {
+      // 障害物衝突時: 倒れず、その場で停止して軽くのけぞる（転倒・コースアウトと区別）
+      groupRef.current.position.y = worldY;
+      groupRef.current.rotation.z = THREE.MathUtils.lerp(groupRef.current.rotation.z, 0, 0.15);
+      groupRef.current.rotation.x = THREE.MathUtils.lerp(groupRef.current.rotation.x, -0.3, 0.15);
+      // 両腕を前に出して衝突をガードするポーズ
+      if (leftArmRef.current) leftArmRef.current.rotation.x = THREE.MathUtils.lerp(leftArmRef.current.rotation.x, -1.2, 0.1);
+      if (rightArmRef.current) rightArmRef.current.rotation.x = THREE.MathUtils.lerp(rightArmRef.current.rotation.x, -1.2, 0.1);
     }
   });
 
   // 状態ごとのマテリアルカラー変更
   let finalBodyColor = bodyColor;
   let finalEmissiveColor = emissiveColor;
-  if (walker.status === 'fallen' || walker.status === 'outOfLane' || walker.status === 'stalled') {
+  if (walker.status === 'fallen' || walker.status === 'obstacleHit' || walker.status === 'outOfLane' || walker.status === 'stalled') {
     finalBodyColor = '#64748b'; // failure gray
     finalEmissiveColor = '#ef4444'; // failure red
   }
@@ -163,7 +171,7 @@ export const WalkerRobot3D = ({ walker, isElite }: WalkerRobot3DProps) => {
             boxShadow: '0 4px 6px rgba(0,0,0,0.3)',
             whiteSpace: 'nowrap'
           }}>
-            🌟 BEST GENOME
+            🌟 現世代ベスト
           </div>
         </Html>
       )}
@@ -185,6 +193,13 @@ export const WalkerRobot3D = ({ walker, isElite }: WalkerRobot3DProps) => {
         <mesh position={[0, 9, 0]} rotation={[Math.PI / 2, 0, 0]}>
           <ringGeometry args={[2.5, 3, 32]} />
           <meshBasicMaterial color="#eab308" transparent opacity={0.6} side={THREE.DoubleSide} />
+        </mesh>
+      )}
+      {walker.status === 'obstacleHit' && (
+        // 衝突: 太く明るい赤の警告リング（転倒の細い赤・コースアウトの橙と区別）
+        <mesh position={[0, 9, 0]} rotation={[Math.PI / 2, 0, 0]}>
+          <ringGeometry args={[2.4, 3.4, 32]} />
+          <meshBasicMaterial color="#ef4444" transparent opacity={0.9} side={THREE.DoubleSide} />
         </mesh>
       )}
 

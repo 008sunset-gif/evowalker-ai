@@ -42,9 +42,9 @@ export const ConfigPage = () => {
         
         {/* AIの性格設定 */}
         <div className="form-group" style={{ marginBottom: '32px' }}>
-          <label className="form-label" style={{ fontSize: '1.2rem', fontWeight: 800, color: '#0f172a' }}>歩行方針（優先事項） <span className="required" style={{ background: '#ef4444', color: 'white', padding: '2px 8px', borderRadius: '4px', fontSize: '12px' }}>必須</span></label>
+          <label className="form-label" style={{ fontSize: '1.2rem', fontWeight: 800, color: '#0f172a' }}>歩行方針（優先事項） <span className="recommended" style={{ background: '#e0f2fe', color: 'var(--color-primary)', border: '1px solid #bae6fd', padding: '2px 8px', borderRadius: '4px', fontSize: '12px', fontWeight: 700 }}>おすすめ</span></label>
           <p className="form-desc" style={{ color: '#64748b', marginBottom: '16px' }}>
-            AIが学習を進めるうえで最も重視する行動評価軸を選択します。
+            AIが学習を進めるうえで最も重視する行動評価軸です。初期設定では「安定重視」が選択されています。そのままでも始められます。
           </p>
           <div className="options-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '16px' }}>
             {AI_PROFILES.map((opt) => (
@@ -69,14 +69,14 @@ export const ConfigPage = () => {
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '24px' }}>
-          {/* 学習スピード */}
+          {/* 学習スタイル（突然変異の強さ） */}
           <div className="form-group">
-            <label className="form-label" style={{ fontWeight: 700 }}>学習シミュレーション速度</label>
+            <label className="form-label" style={{ fontWeight: 700 }}>学習スタイル（変異の強さ）</label>
             <div className="segmented-control" style={{ display: 'flex', background: '#f1f5f9', padding: '4px', borderRadius: '8px' }}>
               {[
-                { id: 'slow', label: '1x' },
-                { id: 'normal', label: '2x' },
-                { id: 'fast', label: '5x' },
+                { id: 'slow', label: '慎重' },
+                { id: 'normal', label: '標準' },
+                { id: 'fast', label: '積極的' },
               ].map((opt) => (
                 <button
                   key={opt.id}

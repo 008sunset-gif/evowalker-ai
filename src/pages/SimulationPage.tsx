@@ -5,6 +5,7 @@ import { SCENARIOS } from '../data/scenarios';
 import { COURSE_LAYOUTS } from '../data/courseData';
 import { initVehicles } from '../simulation/vehiclePhysics';
 import { evaluateEvolutionHistory } from '../simulation/resultEvaluation';
+import { toMeters } from '../simulation/walkerPhysics3D';
 import { generateNextGenerationGenomes } from '../simulation/evolution';
 import { Canvas } from '@react-three/fiber';
 import { SceneSetup } from '../components/three/SceneSetup';
@@ -56,6 +57,7 @@ const SimulationScene = ({
     setAliveCars,
     setStableWalkRate,
     setMaxDistance,
+    scenarioId,
   });
 
   return (
@@ -104,7 +106,9 @@ export const SimulationPage = () => {
   } = useSimulation();
 
   const [aliveCars, setAliveCars] = useState<number>(30);
-  const [stableWalkRate, setStableWalkRate] = useState<number>(0);
+  // 安定歩行率は左上HUDでは表示しないが、ループからの定期更新で再描画をトリガーし
+  // vehiclesRef ベースのライブ集計（ゴール/衝突/転倒/コースアウト）を最新化する役割を持つ
+  const [, setStableWalkRate] = useState<number>(0);
   const [maxDistance, setMaxDistance] = useState<number>(0);
   const [logs, setLogs] = useState<string[]>([]);
   const [runSpeed, setRunSpeed] = useState<number>(1);
@@ -112,6 +116,8 @@ export const SimulationPage = () => {
   const vehiclesRef = useRef<VehicleState[]>([]);
   const isTransitioningRef = useRef<boolean>(false);
   const initialBestScoreRef = useRef<number>(0);
+  // 学習完了フラグ（完了後に世代が勝手に進まないようにするための権威的ガード）
+  const isCompletedRef = useRef<boolean>(false);
 
   // ============================================================
   // Refs で最新値を保持 → Canvas/useFrame 側で stale closure を防ぐ
@@ -152,6 +158,8 @@ export const SimulationPage = () => {
     const sim3DStartPoint = { x: 0, y: 0, angle: 0 };
 
     if (vehiclesRef.current.length === 0) {
+      isCompletedRef.current = false; // 新しい学習の開始時に完了フラグをリセット
+      currentGenerationRef.current = currentGeneration; // 世代カウンタの権威値を同期
       vehiclesRef.current = initVehicles(defaultCarsCount, sim3DStartPoint, aiPersonality);
       setAliveCars(defaultCarsCount);
       setLogs([
@@ -172,6 +180,11 @@ export const SimulationPage = () => {
   const handleGenerationEnd = useCallback(
     (timeLimitExceeded: boolean) => {
       if (isTransitioningRef.current) return;
+      // 完了後に呼ばれても世代を進めない（物理ループを止めるだけ）
+      if (isCompletedRef.current) {
+        isRunningRef.current = false;
+        return;
+      }
       isTransitioningRef.current = true;
 
       // 世代終了中は物理停止
@@ -202,12 +215,19 @@ export const SimulationPage = () => {
         vehiclesRef.current.reduce((sum, v) => sum + v.finalScore, 0) /
           vehiclesRef.current.length
       );
+      // 平均前進距離（実データ distanceTravelled の平均をメートル換算）
+      const averageDistance = toMeters(
+        vehiclesRef.current.reduce((sum, v) => sum + v.distanceTravelled, 0) /
+          vehiclesRef.current.length
+      );
 
+      // 失敗原因ごとに別カウント（二重カウントしない：各個体は単一の status を持つ）
       const fallenCount = vehiclesRef.current.filter((v) => v.status === 'fallen').length;
+      const obstacleHitCount = vehiclesRef.current.filter((v) => v.status === 'obstacleHit').length;
       const outOfLaneCount = vehiclesRef.current.filter((v) => v.status === 'outOfLane').length;
       const stalledCount = vehiclesRef.current.filter((v) => v.status === 'stalled').length;
       const completedCount = vehiclesRef.current.filter((v) => v.status === 'goal').length;
-      const crashCount = fallenCount + outOfLaneCount + stalledCount;
+      const crashCount = fallenCount + obstacleHitCount + outOfLaneCount + stalledCount;
       const aliveCountFinal = vehiclesRef.current.length - crashCount;
 
       const crashRate = crashCount / vehiclesRef.current.length;
@@ -219,8 +239,10 @@ export const SimulationPage = () => {
         generation: currentGenerationRef.current,
         bestScore,
         averageScore,
+        averageDistance,
         crashCount,
         fallenCount,
+        obstacleHitCount,
         outOfLaneCount,
         stalledCount,
         aliveCount: aliveCountFinal,
@@ -266,6 +288,7 @@ export const SimulationPage = () => {
         currentGenerationRef.current >= maxGenerations || shouldEarlyConvert;
 
       if (isLastGeneration) {
+        isCompletedRef.current = true; // 以後の世代生成を完全に停止
         const mockResult = evaluateEvolutionHistory(newHistory);
         completeSimulation(mockResult);
 
@@ -283,7 +306,10 @@ export const SimulationPage = () => {
         ]);
         isTransitioningRef.current = false;
       } else {
-        const nextGen = currentGenerationRef.current + 1;
+        // 最大世代を絶対に超えないようクランプし、ref を権威値として即時更新する
+        // （state 更新の遅延で HUD が 11/10 のようにならないようにする）
+        const nextGen = Math.min(maxGenerations, currentGenerationRef.current + 1);
+        currentGenerationRef.current = nextGen;
         const nextGenData = generateNextGenerationGenomes(
           vehiclesRef.current,
           learningSpeed
@@ -327,6 +353,8 @@ export const SimulationPage = () => {
 
         // 次世代を開始（少し遅延させて確実に vehiclesRef が更新されてから）
         setTimeout(() => {
+          // 完了が確定していたら次世代を開始しない（遅延中に完了した場合のガード）
+          if (isCompletedRef.current) return;
           isTransitioningRef.current = false;
           isRunningRef.current = true;
           setCurrentGeneration(nextGen);
@@ -354,6 +382,21 @@ export const SimulationPage = () => {
     pauseSimulation();
     navigate('/analysis');
   };
+
+  // HUD用のライブ状態カウント（vehiclesRef を直接参照。setAliveCars 等の再描画ごとに再計算される）
+  // 転倒・障害物衝突・コースアウト・ゴールはそれぞれ別 status なので二重カウントされない
+  const goalCount = vehiclesRef.current.filter((v) => v.status === 'goal').length;
+  const collisionCount = vehiclesRef.current.filter((v) => v.status === 'obstacleHit').length;
+  const fallCount = vehiclesRef.current.filter((v) => v.status === 'fallen').length;
+  const outCount = vehiclesRef.current.filter((v) => v.status === 'outOfLane').length;
+
+  // 「進化している感」を出すための改善度（初期世代の最高スコア → 現在の最高スコア）
+  const currentBestScore = vehiclesRef.current.reduce((m, v) => Math.max(m, v.finalScore || 0), 0);
+  const initialBestScore = initialBestScoreRef.current; // 第1世代終了時に記録される
+  const improvePct =
+    initialBestScore > 0
+      ? Math.floor(((currentBestScore - initialBestScore) / initialBestScore) * 100)
+      : 0;
 
   if (!layout) return null;
 
@@ -386,35 +429,57 @@ export const SimulationPage = () => {
 
         {/* トップバー */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-          <div className="card hud-panel" style={{ pointerEvents: 'auto', background: 'rgba(15, 23, 42, 0.85)', backdropFilter: 'blur(12px)', border: '1px solid rgba(14, 165, 233, 0.4)', borderRadius: '12px', width: '320px', padding: '20px', color: '#f8fafc', boxShadow: '0 0 20px rgba(14, 165, 233, 0.1)' }}>
-            <h3 style={{ margin: '0 0 16px 0', fontSize: '14px', fontFamily: 'var(--font-cyber)', color: 'var(--color-primary)', letterSpacing: '2px', textTransform: 'uppercase', borderBottom: '1px solid rgba(14, 165, 233, 0.2)', paddingBottom: '8px' }}>
-              NEURAL TELEMETRY
+          <div className="card hud-panel" style={{ pointerEvents: 'auto', background: 'rgba(15, 23, 42, 0.85)', backdropFilter: 'blur(12px)', border: '1px solid rgba(14, 165, 233, 0.4)', borderRadius: '10px', width: '230px', maxWidth: '230px', padding: '12px 14px', color: '#f8fafc', boxShadow: '0 0 20px rgba(14, 165, 233, 0.1)' }}>
+            <h3 style={{ margin: '0 0 8px 0', fontSize: '12px', fontFamily: 'var(--font-cyber)', color: 'var(--color-primary)', letterSpacing: '1px', borderBottom: '1px solid rgba(14, 165, 233, 0.2)', paddingBottom: '5px' }}>
+              歩行テレメトリー
             </h3>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', columnGap: '10px', rowGap: '7px' }}>
               <div>
-                <div style={{ fontSize: '11px', color: '#94a3b8', fontFamily: 'var(--font-hud)', letterSpacing: '1px' }}>GENERATION</div>
-                <div style={{ fontSize: '20px', fontWeight: 'bold', fontFamily: 'var(--font-hud)', color: '#38bdf8' }}>
-                  {currentGeneration} <span style={{ fontSize: '12px', color: '#64748b' }}>/ {maxGenerations}</span>
+                <div style={{ fontSize: '10px', color: '#94a3b8', fontFamily: 'var(--font-hud)' }}>世代</div>
+                <div style={{ fontSize: '16px', fontWeight: 'bold', fontFamily: 'var(--font-hud)', color: '#38bdf8', lineHeight: 1.1 }}>
+                  {Math.min(currentGeneration, maxGenerations)}<span style={{ fontSize: '11px', color: '#64748b' }}>/{maxGenerations}</span>
                 </div>
               </div>
               <div>
-                <div style={{ fontSize: '11px', color: '#94a3b8', fontFamily: 'var(--font-hud)', letterSpacing: '1px' }}>ACTIVE UNITS</div>
-                <div style={{ fontSize: '20px', fontWeight: 'bold', fontFamily: 'var(--font-hud)', color: '#34d399' }}>{aliveCars}</div>
+                <div style={{ fontSize: '10px', color: '#94a3b8', fontFamily: 'var(--font-hud)' }}>残り個体</div>
+                <div style={{ fontSize: '16px', fontWeight: 'bold', fontFamily: 'var(--font-hud)', color: '#34d399', lineHeight: 1.1 }}>{aliveCars}</div>
               </div>
               <div>
-                <div style={{ fontSize: '11px', color: '#94a3b8', fontFamily: 'var(--font-hud)', letterSpacing: '1px' }}>STABILITY</div>
-                <div style={{ fontSize: '20px', fontWeight: 'bold', fontFamily: 'var(--font-hud)', color: '#0ea5e9' }}>{stableWalkRate}%</div>
+                <div style={{ fontSize: '10px', color: '#94a3b8', fontFamily: 'var(--font-hud)' }}>🎯 ゴール</div>
+                <div style={{ fontSize: '16px', fontWeight: 'bold', fontFamily: 'var(--font-hud)', color: '#22c55e', lineHeight: 1.1 }}>{goalCount}</div>
               </div>
               <div>
-                <div style={{ fontSize: '11px', color: '#94a3b8', fontFamily: 'var(--font-hud)', letterSpacing: '1px' }}>MAX DISTANCE</div>
-                <div style={{ fontSize: '20px', fontWeight: 'bold', fontFamily: 'var(--font-hud)', color: '#38bdf8' }}>{Math.floor(maxDistance / 5)}m</div>
+                <div style={{ fontSize: '10px', color: '#94a3b8', fontFamily: 'var(--font-hud)' }}>💥 衝突</div>
+                <div style={{ fontSize: '16px', fontWeight: 'bold', fontFamily: 'var(--font-hud)', color: '#ef4444', lineHeight: 1.1 }}>{collisionCount}</div>
+              </div>
+              <div>
+                <div style={{ fontSize: '10px', color: '#94a3b8', fontFamily: 'var(--font-hud)' }}>⚠️ 転倒</div>
+                <div style={{ fontSize: '16px', fontWeight: 'bold', fontFamily: 'var(--font-hud)', color: '#f59e0b', lineHeight: 1.1 }}>{fallCount}</div>
+              </div>
+              <div>
+                <div style={{ fontSize: '10px', color: '#94a3b8', fontFamily: 'var(--font-hud)' }}>↗️ コースアウト</div>
+                <div style={{ fontSize: '16px', fontWeight: 'bold', fontFamily: 'var(--font-hud)', color: '#a855f7', lineHeight: 1.1 }}>{outCount}</div>
+              </div>
+              <div>
+                <div style={{ fontSize: '10px', color: '#94a3b8', fontFamily: 'var(--font-hud)' }}>📏 最高距離</div>
+                <div style={{ fontSize: '16px', fontWeight: 'bold', fontFamily: 'var(--font-hud)', color: '#38bdf8', lineHeight: 1.1 }}>{toMeters(maxDistance)}m</div>
+              </div>
+              <div>
+                <div style={{ fontSize: '10px', color: '#94a3b8', fontFamily: 'var(--font-hud)' }}>🧬 進化</div>
+                {initialBestScore > 0 ? (
+                  <div style={{ fontSize: '16px', fontWeight: 'bold', fontFamily: 'var(--font-hud)', color: improvePct >= 0 ? '#22c55e' : '#ef4444', lineHeight: 1.1 }}>
+                    {improvePct >= 0 ? '+' : ''}{improvePct}%
+                  </div>
+                ) : (
+                  <div style={{ fontSize: '13px', fontWeight: 'bold', fontFamily: 'var(--font-hud)', color: '#64748b', lineHeight: 1.1 }}>計測中</div>
+                )}
               </div>
             </div>
           </div>
 
           <div className="card hud-panel" style={{ pointerEvents: 'auto', background: 'rgba(15, 23, 42, 0.85)', backdropFilter: 'blur(12px)', border: '1px solid rgba(14, 165, 233, 0.4)', borderRadius: '12px', width: '320px', padding: '20px', color: '#f8fafc', boxShadow: '0 0 20px rgba(14, 165, 233, 0.1)' }}>
-            <h3 style={{ margin: '0 0 12px 0', fontSize: '14px', fontFamily: 'var(--font-cyber)', color: 'var(--color-primary)', letterSpacing: '2px', textTransform: 'uppercase', borderBottom: '1px solid rgba(14, 165, 233, 0.2)', paddingBottom: '8px' }}>
-              SYSTEM LOGS
+            <h3 style={{ margin: '0 0 12px 0', fontSize: '14px', fontFamily: 'var(--font-cyber)', color: 'var(--color-primary)', letterSpacing: '2px', borderBottom: '1px solid rgba(14, 165, 233, 0.2)', paddingBottom: '8px' }}>
+              システムログ
             </h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '120px', overflowY: 'auto', fontSize: '12px', fontFamily: 'var(--font-body)', color: '#cbd5e1' }}>
               {logs.slice(-5).map((log, idx) => (
@@ -445,7 +510,7 @@ export const SimulationPage = () => {
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <span style={{ fontSize: '12px', color: '#94a3b8', fontFamily: 'var(--font-hud)', letterSpacing: '1px' }}>速度:</span>
               <div style={{ display: 'flex', gap: '4px' }}>
-                {[1, 2, 5].map((s) => (
+                {[1, 2, 5, 10, 50].map((s) => (
                   <button
                     key={s}
                     onClick={() => setRunSpeed(s)}

@@ -45,6 +45,11 @@ export interface VehicleGenome {
   speedFactor: number;        // 前進速度のベース
   steeringBias: number;       // 左寄り・右寄りの癖 (直進性のズレ)
   recoveryAbility: number;    // バランスを崩した時に立て直す力
+  // --- 歩行パターン特性（障害物を「見て避ける」のではなく、歩き方の違いで軌道が決まる） ---
+  lateralAmplitude: number;   // 左右に蛇行する大きさ
+  lateralFrequency: number;   // 蛇行の周期（速さ）
+  lateralPhase: number;       // 左右移動の初期位相（揺れの開始タイミングの個体差）
+  centerPull: number;         // 中央へ戻ろうとする力
 }
 
 // 歩行個体の基本物理状態 (Step 4追加, Step 6・Step 7拡張)
@@ -68,7 +73,8 @@ export interface VehicleState {
   finalScore: number;        // 最終算出スコア
   genome: VehicleGenome;     // 個体の歩行遺伝子特性
   reachedGoal: boolean;      // ゴール到達フラグ
-  status: 'walking' | 'fallen' | 'outOfLane' | 'stalled' | 'goal'; // 状態
+  // 状態（転倒・障害物衝突・コースアウト・立ち往生・ゴールは失敗原因として別扱い）
+  status: 'walking' | 'fallen' | 'obstacleHit' | 'outOfLane' | 'stalled' | 'goal';
 }
 
 // コース上の目標経由点
@@ -82,9 +88,11 @@ export interface GenerationResult {
   generation: number;
   bestScore: number;
   averageScore: number;
+  averageDistance: number; // 全個体の平均前進距離(メートル換算, toMeters基準)
   crashCount: number;
-  fallenCount: number;
-  outOfLaneCount: number;
+  fallenCount: number;        // 純粋な転倒（姿勢制御の失敗）のみ
+  obstacleHitCount: number;   // 障害物衝突（回避判断の失敗）のみ
+  outOfLaneCount: number;     // コースアウト（直進性・復帰力の失敗）のみ
   stalledCount: number;
   aliveCount: number;
   bestVehicleId: number;

@@ -36,7 +36,11 @@ const HeroWalkerDemo = () => {
       wobbleStrength: 0.2,
       speedFactor: 1.0,
       steeringBias: 0,
-      recoveryAbility: 1.0
+      recoveryAbility: 1.0,
+      lateralAmplitude: 0.3,
+      lateralFrequency: 0.5,
+      lateralPhase: 0,
+      centerPull: 1.0
     },
   });
 
@@ -73,7 +77,7 @@ export const TopPage = () => {
             <span style={{ color: 'var(--color-primary)' }}>AI歩行の進化を観察する。</span>
           </h1>
           <p className="hero-subtitle" style={{ color: '#334155', fontWeight: 500, lineHeight: '1.7' }}>
-            EvoWalker AIは、ロボットたちが二足歩行を学習する進化シミュレーターです。<br/>
+            <b>遺伝的アルゴリズム</b>で、二足歩行ロボットが世代ごとに転倒・衝突・コースアウトを乗り越えて進化する様子を3Dで観察できるシミュレーターです。<br/>
             最初の世代は転倒やコースアウトを繰り返しますが、成績の良い個体が遺伝子を引き継ぐことで、世代ごとにまっすぐ歩ける個体が増えていきます。
           </p>
 
@@ -97,9 +101,6 @@ export const TopPage = () => {
           <div className="hero-actions" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '12px' }}>
             <button onClick={handleStart} className="btn btn-primary btn-lg pulse-glow" style={{ fontSize: '1.1rem', fontWeight: 800, padding: '16px 36px' }}>
               進化シミュレーションを始める
-            </button>
-            <button onClick={handleStart} style={{ background: 'none', border: 'none', color: '#64748b', fontSize: '0.9rem', cursor: 'pointer', textDecoration: 'underline', padding: '4px 8px' }}>
-              詳細設定から始める
             </button>
           </div>
         </div>

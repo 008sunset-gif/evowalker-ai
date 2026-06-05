@@ -35,7 +35,8 @@ export const ResultPage = () => {
     const total = maxCarCount;
     return {
       stable: Math.min(100, Math.max(0, Math.floor((g.aliveCount / total) * 100))),
-      dist: Math.min(600, Math.max(0, Math.floor((g.averageScore + 50) / 2.5))),
+      // 平均前進距離は実データ（メートル換算済みの averageDistance）を使用。スコアからの逆算はしない。
+      dist: Math.max(0, Math.floor(g.averageDistance ?? 0)),
       crash: Math.min(100, Math.max(0, Math.floor((g.fallenCount / total) * 100))),
       goal: Math.min(100, Math.max(0, Math.floor((g.completedCount / total) * 100))),
       outOfLane: Math.min(100, Math.max(0, Math.floor((g.outOfLaneCount / total) * 100))),
@@ -262,15 +263,15 @@ export const ResultPage = () => {
             <div className="fade-in" style={{ marginTop: '24px', borderTop: '1px solid #e2e8f0', paddingTop: '24px', fontSize: '14px', color: '#475569', lineHeight: '1.8' }}>
               <h5 style={{ fontWeight: '800', color: '#0f172a', marginBottom: '12px', fontSize: '15px' }}>遺伝的アルゴリズムの仕組み</h5>
               <p style={{ marginBottom: '24px' }}>
-                本シミュレーターは、ニューラルネットワークを用いず、各ロボット個体の「脚部関節の回転速度」「可動域振幅」「位相シフト」「ベース角度」のパラメータを<b>「ゲノム（DNA）」</b>として定義しています。
-                毎世代の評価値（前進距離、生存時間から算出された適合度スコア）に基づき、上位の優秀個体を無変更で引き継ぐ<b>「エリート選抜（保護）」</b>と、二つの親のゲノムを交差させる<b>「交叉（Crossover）」</b>、そして一定確率でランダムな変化を加える<b>「突然変異（Mutation）」</b>により、世代を追うごとに環境に適応した歩行パターンが動的に醸成されていきます。
+                本シミュレーターは、ニューラルネットワークを用いず、各ロボット個体の歩行特性（歩幅 <code>strideLength</code>、歩行リズム <code>stepRhythm</code>、姿勢補正力 <code>balanceCorrection</code>、ふらつき量 <code>wobbleStrength</code>、立て直す力 <code>recoveryAbility</code>、前進速度 <code>speedFactor</code> など8つのパラメータ）を<b>「ゲノム（DNA）」</b>として定義しています。
+                毎世代の評価値（前進距離・生存時間・中央維持・姿勢安定から算出された適合度スコア）に基づき、上位の優秀個体を無変更で引き継ぐ<b>「エリート選抜（保護）」</b>と、選抜された親のゲノムに一定確率でランダムな変化を加える<b>「突然変異（Mutation）」</b>により、世代を追うごとに環境に適応した歩行パターンが動的に醸成されていきます。（交叉は用いず、エリート選抜＋突然変異によるシンプルな進化モデルです。）
               </p>
-              
+
               <h5 style={{ fontWeight: '800', color: '#0f172a', marginBottom: '12px', fontSize: '15px' }}>UI/UXとフロントエンド設計意図</h5>
               <p style={{ marginBottom: '24px' }}>
-                シミュレーターのビジュアル面では、React Three Fiber と Rapier 物理エンジンを用いて、ブラウザ上でリアルタイムな3D物理演算と描画を実現しています。
-                各個体の関節にモーター（ImpulseJoint）を適用し、インバースキネマティクスではなく純粋な物理トルクによる駆動を行うことで、よりリアルで予測不可能な歩行の試行錯誤を視覚化しました。
-                また、世代数の多さに起因する「ユーザーの待機ストレス」を解消するため、<b>シミュレーション速度の倍速機能</b>や、直感的な<b>カメラトラッキング</b>などを実装し、近未来のゲーム風UI/UXとして仕上げています。
+                シミュレーターのビジュアル面では、<b>React Three Fiber（Three.js）</b>を用いて、ブラウザ上でリアルタイムな3D描画を実現しています。
+                歩行の挙動は外部物理エンジンに頼らず、サイン波ベースの歩容と重心バランスを計算する<b>自作の簡易歩行物理</b>として実装し、世代ごとに変化する歩行パターンの試行錯誤を視覚化しました。
+                また、世代数の多さに起因する「ユーザーの待機ストレス」を解消するため、<b>再生倍速機能（1倍速 / 2倍速 / 5倍速）</b>や、対象個体を追う<b>カメラトラッキング</b>などを実装しています。
               </p>
 
               <h5 style={{ fontWeight: '800', color: '#0f172a', marginBottom: '12px', fontSize: '15px' }}>診断メトリクス実績</h5>
