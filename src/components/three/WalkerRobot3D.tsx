@@ -60,31 +60,74 @@ export const WalkerRobot3D = ({ walker, isElite }: WalkerRobot3DProps) => {
     // 前進方向 (Heading: angle) -> +X方向基準でY軸回転
     const targetHeading = walker.angle;
 
+    // ====== "上手さ"遺伝子 → 歩容の安定度マッピング（描画のみ。GA/物理ロジックには一切不干渉） ======
+    // balanceCorrection 高 = 上体が安定 / recoveryAbility 高 = 立て直しが滑らか /
+    // wobbleStrength 高 = 生まれつき不安定。これらを正規化し、歩きの「ガクつき量」を合成する。
+    const g = walker.genome;
+    const balance01 = Math.min(1, Math.max(0, (g.balanceCorrection ?? 1.0) / 1.5));
+    const recovery01 = Math.min(1, Math.max(0, (g.recoveryAbility ?? 1.0) / 1.2));
+    const wobble01 = Math.min(1, Math.max(0, (g.wobbleStrength ?? 1.0) / 2.5));
+    // 0.0 = 滑らかな達人 / 1.0 = ガクガクの新人。世代が進むと選抜でこの値が下がり、歩きが洗練されて見える。
+    const instability = Math.min(
+      1,
+      wobble01 * 0.5 + (1 - balance01) * 0.3 + (1 - recovery01) * 0.2
+    );
+    const idPhase = walker.id * 1.7; // 個体ごとに揺れの位相をずらして群れの単調さを防ぐ
+
     // ====== 歩行アニメーション ======
     if (walker.isActive || walker.status === 'stalled') {
       const stepRhythm = walker.genome.stepRhythm || 1.0;
       const strideLength = walker.genome.strideLength || 1.0;
       const phase = walker.aliveTime * stepRhythm * 0.14;
 
-      // 胴体の上下動（ボビング）
-      groupRef.current.position.y = worldY + Math.abs(Math.sin(phase * 2)) * 0.5;
-      groupRef.current.rotation.z = targetTilt;
-      groupRef.current.rotation.y = targetHeading;
+      // 非整数倍音サインを重ねて「不規則だが滑らかな揺れ」を作る（乱数フリッカを避ける）
+      const tremor = (amp: number, freq: number) => Math.sin(phase * freq + idPhase) * amp;
+      // 上体の横揺れ: balance低/wobble高で高周波の小刻みな揺れ + recovery低で低周波の戻り遅れ
+      const swayZ =
+        instability * (tremor(0.22, 1.7) + tremor(0.1, 3.3)) +
+        (1 - recovery01) * tremor(0.16, 0.9);
+      // 上体の前後ぐらつき（ピッチ）
+      const pitchX = instability * (tremor(0.12, 2.3) + tremor(0.05, 4.1));
 
-      const leftThighAngle = Math.sin(phase) * 0.5 * strideLength;
-      const rightThighAngle = Math.sin(phase + Math.PI) * 0.5 * strideLength;
+      // 胴体の上下動（ボビング）：両脚接地で沈み、立脚の中央で持ち上がる（2倍周期・滑らか）
+      const baseBob = (0.5 - 0.5 * Math.cos(phase * 2)) * 0.55;
+      const roughBob = instability * Math.abs(Math.sin(phase * 3.1 + idPhase)) * 0.4;
+      // 体重移動による自然な左右の揺れ（歩調と同周期）＋上体のひねり（肩と腰の逆回転）＋わずかな前傾
+      const naturalSwayZ = Math.sin(phase) * 0.07;
+      const torsoYaw = Math.sin(phase) * 0.05;
+      const forwardLean = 0.05;
 
-      const sinP = Math.sin(phase);
-      const leftKneeAngle = sinP > 0 ? sinP * 0.7 : 0;
-      const rightKneeAngle = sinP < 0 ? -sinP * 0.7 : 0;
+      groupRef.current.position.y = worldY + baseBob + roughBob;
+      groupRef.current.rotation.z = targetTilt + naturalSwayZ + swayZ;
+      groupRef.current.rotation.x = forwardLean + pitchX;
+      groupRef.current.rotation.y = targetHeading + torsoYaw;
 
-      const leftFootWorldAngle = sinP > 0 ? 0.16 * sinP : 0;
-      const leftAnkleAngle = leftFootWorldAngle - (leftThighAngle - leftKneeAngle);
-      const rightFootWorldAngle = sinP < 0 ? -0.16 * sinP : 0;
-      const rightAnkleAngle = rightFootWorldAngle - (rightThighAngle - rightKneeAngle);
+      // 脚の前後スイング（股関節）— 不安定なほど歩幅が左右非対称・小刻みに乱れる
+      const strideJitterL = 1 + instability * tremor(0.28, 1.3);
+      const strideJitterR =
+        1 + instability * Math.sin(phase * 1.3 + idPhase + Math.PI) * 0.28;
+      const thighAmp = 0.55 * strideLength;
+      const leftThighAngle = Math.sin(phase) * thighAmp * strideJitterL;
+      const rightThighAngle = Math.sin(phase + Math.PI) * thighAmp * strideJitterR;
 
-      // 腕は足と逆位相で振る (左足が前なら左腕は後ろ)
-      const armSwingAngle = Math.sin(phase) * 0.5;
+      // 膝：遊脚（踏み出し）で大きく曲げて足を持ち上げ、立脚ではほぼ伸ばす。
+      //   sin を二乗した正の隆起で「立脚=伸び／遊脚=曲げ」のメリハリを出す（膝は後方へ曲がる）。
+      const kneeBend = (legPhase: number) => {
+        const swing = Math.max(0, Math.sin(legPhase + 0.9));
+        return swing * swing * 1.2;
+      };
+      const leftKneeAngle = kneeBend(phase);
+      const rightKneeAngle = kneeBend(phase + Math.PI);
+
+      // 足首：踏み出しでつま先を上げ、蹴り出しで下げる＋脛の傾きに対して足裏を地面寄りへ補正
+      const ankleRoll = (legPhase: number, thigh: number, knee: number) =>
+        Math.sin(legPhase - 0.3) * 0.2 - (thigh - knee) * 0.22;
+      const leftAnkleAngle = ankleRoll(phase, leftThighAngle, leftKneeAngle);
+      const rightAnkleAngle = ankleRoll(phase + Math.PI, rightThighAngle, rightKneeAngle);
+
+      // 腕は脚と逆位相で自然に振る（左脚が前なら左腕は後ろ）。不安定な個体は腕がバタつく
+      const armSwingAngle = Math.sin(phase) * 0.45;
+      const armFlail = instability * tremor(0.35, 2.7);
 
       if (leftLegRef.current) leftLegRef.current.rotation.x = leftThighAngle;
       if (rightLegRef.current) rightLegRef.current.rotation.x = rightThighAngle;
@@ -92,8 +135,8 @@ export const WalkerRobot3D = ({ walker, isElite }: WalkerRobot3DProps) => {
       if (rightKneeRef.current) rightKneeRef.current.rotation.x = -rightKneeAngle;
       if (leftAnkleRef.current) leftAnkleRef.current.rotation.x = leftAnkleAngle;
       if (rightAnkleRef.current) rightAnkleRef.current.rotation.x = rightAnkleAngle;
-      if (leftArmRef.current) leftArmRef.current.rotation.x = -armSwingAngle;
-      if (rightArmRef.current) rightArmRef.current.rotation.x = armSwingAngle;
+      if (leftArmRef.current) leftArmRef.current.rotation.x = -armSwingAngle + armFlail;
+      if (rightArmRef.current) rightArmRef.current.rotation.x = armSwingAngle - armFlail;
 
       // stalled 時は激しく揺らす（立ち往生の足掻き）
       if (walker.status === 'stalled') {
