@@ -8,7 +8,6 @@ const STEPS = [
   { path: '/', label: 'トップ' },
   { path: '/scenario', label: 'レーン選択' },
   { path: '/config', label: 'AI設定' },
-  { path: '/briefing', label: 'ブリーフィング' },
   { path: '/simulation', label: '歩行実験' },
   { path: '/analysis', label: '進化分析' },
   { path: '/result', label: '最終診断' },
@@ -28,8 +27,8 @@ export const Layout = ({ children }: LayoutProps) => {
         <div className="header-logo">
           <Link to="/" className="logo-link" style={{ display: 'flex', alignItems: 'center', gap: '12px', textDecoration: 'none' }}>
             <img src="/brand_logo.png" alt="EvoWalker AI Logo" style={{ width: '32px', height: '32px', objectFit: 'contain', filter: 'drop-shadow(0 0 8px rgba(14,165,233,0.5))' }} />
-            <span className="logo-text" style={{ fontFamily: 'var(--font-cyber)', fontSize: '20px', fontWeight: '700', color: '#f8fafc', letterSpacing: '1px' }}>
-              EVOWALKER <span className="highlight" style={{ color: 'var(--color-primary)' }}>AI</span>
+            <span className="logo-text" translate="no" style={{ fontFamily: 'var(--font-heading)', fontSize: '20px', fontWeight: 800, color: '#f8fafc', letterSpacing: '-0.01em' }}>
+              EvoWalker <span className="highlight" style={{ color: 'var(--color-primary)' }}>AI</span>
             </span>
           </Link>
         </div>

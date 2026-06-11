@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { useSimulation } from '../context/SimulationContext';
 import { SCENARIOS } from '../data/scenarios';
+import { Button } from '../components/Button';
 import type { ScenarioType } from '../types/simulation';
 
 interface ScenarioCardProps {
@@ -29,9 +30,11 @@ const ScenarioCard = ({
   const imageUrl = `/stage_${id}.png`;
 
   return (
-    <div
+    <button
+      type="button"
       className={`scenario-card ${isSelected ? 'selected' : ''}`}
       onClick={onSelect}
+      aria-pressed={isSelected}
       style={{ overflow: 'hidden', display: 'flex', flexDirection: 'column', padding: 0 }}
     >
       <div style={{ width: '100%', height: '180px', backgroundImage: `url(${imageUrl})`, backgroundSize: 'cover', backgroundPosition: 'center', position: 'relative' }}>
@@ -45,22 +48,22 @@ const ScenarioCard = ({
         <h3 className="scenario-title" style={{ marginTop: 0, marginBottom: '8px' }}>{title}</h3>
         <p className="scenario-desc" style={{ marginBottom: '16px', fontSize: '14px', color: 'var(--text-muted)' }}>{description}</p>
         
-        <div className="scenario-specs-box" style={{ background: '#f8fafc', padding: '12px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+        <div className="scenario-specs-box" style={{ background: 'var(--bg-inset)', padding: '12px', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
           <div className="scenario-spec-row" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px', fontSize: '13px' }}>
-            <span className="spec-name" style={{ color: '#64748b' }}>レーン幅</span>
+            <span className="spec-name" style={{ color: 'var(--text-muted)' }}>レーン幅</span>
             <span className="spec-val" style={{ fontWeight: 600 }}>{curveCount}</span>
           </div>
           <div className="scenario-spec-row" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px', fontSize: '13px' }}>
-            <span className="spec-name" style={{ color: '#64748b' }}>障害物</span>
+            <span className="spec-name" style={{ color: 'var(--text-muted)' }}>障害物</span>
             <span className="spec-val" style={{ fontWeight: 600 }}>{obstacleDensity}</span>
           </div>
           <div className="scenario-spec-row" style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
-            <span className="spec-name" style={{ color: '#64748b' }}>推奨方針</span>
+            <span className="spec-name" style={{ color: 'var(--text-muted)' }}>推奨方針</span>
             <span className="spec-val" style={{ color: 'var(--color-primary)', fontWeight: 700 }}>{recommendedAI}</span>
           </div>
         </div>
       </div>
-    </div>
+    </button>
   );
 };
 
@@ -72,11 +75,11 @@ export const ScenarioPage = () => {
     <div className="scenario-page-container fade-in" style={{ maxWidth: '1200px', margin: '0 auto', padding: '40px 20px' }}>
       <div className="page-header-section" style={{ textAlign: 'center', marginBottom: '40px' }}>
         <div className="portfolio-badge" style={{ background: 'var(--color-primary)', color: 'white', letterSpacing: '1px', fontWeight: 700, display: 'inline-block', marginBottom: '16px' }}>STAGE SELECTION</div>
-        <h2 className="page-title" style={{ fontSize: '2.5rem', color: '#0f172a' }}>歩行レーンの選択</h2>
-        <p className="page-subtitle" style={{ fontSize: '1.1rem', color: '#475569' }}>AIが学習・歩行を行うテストレーンを選択してください。</p>
+        <h2 className="page-title" style={{ fontSize: '2.5rem', color: 'var(--text-title)' }}>歩行レーンの選択</h2>
+        <p className="page-subtitle" style={{ fontSize: '1.1rem', color: 'var(--text-main)' }}>AIが学習・歩行を行うテストレーンを選択してください。</p>
       </div>
 
-      <div className="scenarios-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '24px', marginBottom: '40px' }}>
+      <div className="scenarios-grid" style={{ marginBottom: '40px' }}>
         {SCENARIOS.map((sc) => (
           <ScenarioCard
             key={sc.id}
@@ -93,18 +96,16 @@ export const ScenarioPage = () => {
         ))}
       </div>
 
-      <div className="navigation-actions" style={{ display: 'flex', justifyContent: 'center', gap: '16px' }}>
-        <button onClick={() => navigate('/')} className="btn btn-secondary btn-lg" style={{ width: '200px' }}>
-          戻る
-        </button>
-        <button
+      <div className="page-nav">
+        <Button variant="ghost" onClick={() => navigate('/')}>← 戻る</Button>
+        <Button
+          variant="primary"
+          size="lg"
           onClick={() => navigate('/config')}
           disabled={!selectedScenarioId}
-          className="btn btn-primary btn-lg pulse-glow"
-          style={{ width: '250px' }}
         >
-          歩行AIを設定する
-        </button>
+          歩行AIを設定する →
+        </Button>
       </div>
     </div>
   );

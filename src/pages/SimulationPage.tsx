@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useSimulation } from '../context/SimulationContext';
+import { Button } from '../components/Button';
 import { SCENARIOS } from '../data/scenarios';
 import { COURSE_LAYOUTS } from '../data/courseData';
 import { initVehicles } from '../simulation/vehiclePhysics';
@@ -532,18 +533,15 @@ export const SimulationPage = () => {
             </div>
           </div>
 
-          <div style={{ pointerEvents: 'auto', display: 'flex', gap: '12px' }}>
-            <button onClick={() => navigate('/config')} className="btn btn-secondary" style={{ fontFamily: 'var(--font-sans)' }}>
-              設定に戻る
-            </button>
-            <button
+          <div style={{ pointerEvents: 'auto', display: 'flex', gap: '12px', alignItems: 'center' }}>
+            <Button variant="ghost" onClick={() => navigate('/config')}>← 設定に戻る</Button>
+            <Button
+              variant="primary"
               onClick={handleNextPage}
               disabled={mockEvolutionHistory.length === 0}
-              className="btn btn-primary pulse-glow"
-              style={{ fontFamily: 'var(--font-sans)', padding: '12px 32px' }}
             >
-              分析へ進む
-            </button>
+              分析へ進む →
+            </Button>
           </div>
         </div>
 
