@@ -80,11 +80,13 @@ export function updateWalkerPhysics3D(
   const speedFactor = genome.speedFactor || 1.0;
   const steeringBias = genome.steeringBias || 0.0;
   const recoveryAbility = genome.recoveryAbility || 1.0;
-  // 歩行パターン特性（障害物を「見て避ける」のではなく、歩き方の差で軌道が決まる）
+  // 歩行パターン特性（蛇行・流れ・中央復帰）に加え、障害物を「見て避ける」遺伝子を持つ
   const lateralAmplitude = genome.lateralAmplitude || 0.0;
   const lateralFrequency = genome.lateralFrequency || 0.0;
   const lateralPhase = genome.lateralPhase || 0.0;
   const centerPull = genome.centerPull || 0.0;
+  // 障害物回避の強さ（前方センサーで検知した障害物を避ける度合い。GAの選抜で進化する）
+  const obstacleAvoidance = genome.obstacleAvoidance || 0.0;
 
   // ロボットの当たり判定半径（障害物の衝突判定に使用）
   const robotRadius = 3.0;
@@ -130,10 +132,9 @@ export function updateWalkerPhysics3D(
   // 常に左右どちらかへ進みやすい癖(steeringBias)と、歩行による横流れ(lateralDrift)
   walker.angle = centerCorrectionSteering + steeringBias * 0.04 + Math.sin(phase * 0.5) * lateralDrift * 0.02;
 
-  // ========== 横ずれ (y) の計算：個体ごとの「歩き方」の差で軌道が決まる ==========
-  // 障害物を直接検知して避けるのではなく、蛇行・流れ・中央復帰などの歩行パターンの違いによって、
-  // 結果的に障害物を通過できる個体／ぶつかる個体／コースアウトする個体が自然に生まれる。
-  // （前方障害物センサーによる意図的回避は廃止）
+  // ========== 横ずれ (y) の計算 ==========
+  // 基本は個体ごとの「歩き方」（蛇行・流れ・中央復帰）で軌道が決まる。
+  // これに加えて circuit では、前方センサーで障害物を検知し空き帯へ寄せる回避（avoidVel）を重ねる。
   const meanderOmega = 0.015 + lateralFrequency * 0.04;                 // 蛇行の角速度（周期）＝個体差
   const meanderPosAmp = lateralAmplitude * 18;                          // 蛇行の位置振幅（個体差）
   const meanderPhaseVal = walker.aliveTime * meanderOmega + lateralPhase * Math.PI;
@@ -145,7 +146,43 @@ export function updateWalkerPhysics3D(
   const driftFromWobble = walker.wobbleAngle * 2.0;                     // ふらつき（転倒寄り）由来
   const driftFromHeading = Math.sin(walker.angle) * walker.speed * 5.0; // 進行方向由来
 
-  walker.y += meanderVel + steadyDrift + centerReturn + driftFromWobble + driftFromHeading;
+  // ========== 障害物センサーによる回避（circuit のみ・進化で上達する行動） ==========
+  // 前方 LOOKAHEAD 以内の障害物群を「見て」、レーン内で現在地に最も近い空き帯へ横移動する。
+  // 回避の強さは遺伝子 obstacleAvoidance に比例。ぶつかると即失敗のため、GAの選抜で
+  // 「避けて前進する」個体（= より遠くまで到達する個体）が世代ごとに増える。
+  let avoidVel = 0;
+  if (scenarioId === 'circuit' && obstacleAvoidance > 0.001) {
+    const LOOKAHEAD = 60;             // この距離だけ前方の障害物に反応
+    const sensorMargin = robotRadius + 5; // 余裕を持って避ける
+    const walkerZ = -walker.y;
+    const laneFree = getLaneHalfWidth(scenarioId) - robotRadius;
+    // 前方かつ近い（まだ通過していない）障害物の占有帯を集める
+    const blocked: Array<[number, number]> = [];
+    for (const o of OBSTACLES_3D) {
+      if (o.x + o.width / 2 > walker.x - 2 && o.x - o.width / 2 < walker.x + LOOKAHEAD) {
+        blocked.push([o.z - o.depth / 2 - sensorMargin, o.z + o.depth / 2 + sensorMargin]);
+      }
+    }
+    if (blocked.length > 0) {
+      const isBlockedAt = (z: number) => blocked.some(([a, b]) => z > a && z < b);
+      // 現在の進路が塞がれている時だけ回避を発動（無駄な蛇行を避ける）
+      if (isBlockedAt(walkerZ)) {
+        const candidates: number[] = [0];
+        for (const [a, b] of blocked) {
+          candidates.push(a - 1, b + 1);
+        }
+        const free = candidates
+          .filter((z) => z >= -laneFree && z <= laneFree && !isBlockedAt(z))
+          .sort((p, q) => Math.abs(p - walkerZ) - Math.abs(q - walkerZ));
+        if (free.length > 0) {
+          const targetY = -free[0]; // worldZ → walker.y
+          avoidVel = (targetY - walker.y) * 0.08 * Math.min(2.0, obstacleAvoidance);
+        }
+      }
+    }
+  }
+
+  walker.y += meanderVel + steadyDrift + centerReturn + driftFromWobble + driftFromHeading + avoidVel;
 
   // ========== ゴール判定 ==========
   if (walker.x >= GOAL_X) {

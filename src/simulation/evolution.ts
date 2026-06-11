@@ -68,6 +68,7 @@ export const generateNextGenerationGenomes = (
       lateralFrequency: mutateValue(parent.genome.lateralFrequency ?? 0.5, mutationRate, 0.0, 2.0),
       lateralPhase: mutateValue(parent.genome.lateralPhase ?? 0.0, mutationRate, -1.5, 1.5),
       centerPull: mutateValue(parent.genome.centerPull ?? 0.4, mutationRate, 0.0, 1.5),
+      obstacleAvoidance: mutateValue(parent.genome.obstacleAvoidance ?? 0.6, mutationRate, 0.0, 2.0),
     });
   }
 

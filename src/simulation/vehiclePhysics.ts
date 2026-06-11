@@ -19,7 +19,8 @@ export const createInitialGenome = (_personality: PersonalityType): VehicleGenom
     lateralAmplitude: Math.random() * 2.0,        // 0.0 〜 2.0（蛇行の大きさを広くばらつかせる）
     lateralFrequency: Math.random() * 1.5,        // 0.0 〜 1.5（蛇行の周期）
     lateralPhase: (Math.random() - 0.5) * 2,      // -1.0 〜 1.0（揺れの開始位相、後段で×π）
-    centerPull: Math.random() * 0.8               // 0.0 〜 0.8（弱め：多くが中央に戻りきれない）
+    centerPull: Math.random() * 0.8,              // 0.0 〜 0.8（弱め：多くが中央に戻りきれない）
+    obstacleAvoidance: Math.random() * 1.2        // 0.0 〜 1.2（初期はばらつく＝避けられない個体も多い）
   };
 };
 

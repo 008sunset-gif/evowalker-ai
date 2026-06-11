@@ -50,6 +50,7 @@ export interface VehicleGenome {
   lateralFrequency: number;   // 蛇行の周期（速さ）
   lateralPhase: number;       // 左右移動の初期位相（揺れの開始タイミングの個体差）
   centerPull: number;         // 中央へ戻ろうとする力
+  obstacleAvoidance: number;  // 前方障害物を避ける強さ（circuitで進化・前方センサー連動）
 }
 
 // 歩行個体の基本物理状態 (Step 4追加, Step 6・Step 7拡張)
